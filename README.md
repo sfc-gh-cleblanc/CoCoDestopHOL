@@ -53,30 +53,35 @@ You can work in both simultaneously — edit a SQL file manually in Editor, then
 | Mode | Behavior |
 |------|----------|
 | Default (Confirm Actions) | Agent prompts for permission before changes |
-| Plan Mode (`/plan`) | Read-only — agent proposes but cannot execute |
+| Plan Mode | Agent dropdown → **Plan** | Read-only — agent proposes but cannot execute |
 | Bypass (`/bypass`) | Agent auto-approves all actions |
 
 **Hands-on Exercise:**
 1. Click the **Editor** tab — use **File → Open Folder** to open your workshop project directory (e.g., `~/CortexCodeWorkshop`). This sets your **working directory** — all files the agent creates or reads will be relative to this folder. You'll see the folder tree appear in the left sidebar.
 2. In the left sidebar, expand the **Snowflake catalog** and browse to the **RETAIL_DB** database. Explore the schemas and tables listed — this is your reference for the retail database schema used throughout the workshop.
 3. Click the **Agent** tab — ask: "Within RETAIL_DB, what tables do we have related to produce inventory?"
-4. Switch to plan mode: `/plan`
+4. Switch to plan mode: click the **Agent** dropdown in the prompt toolbar and select **Plan**
 5. Ask: "Build a pipeline that loads daily POS files from a stage into RETAIL_DB.SALES.DAILY_ITEM_SALES, deduplicates on item_id + store_id + sale_date, and refreshes a downstream dynamic table for weekly shrinkage rollups. Prefix all objects created with XX_" — Replace **XX_** with your initials since we are in a shared working environment. observe it designs the full pipeline without creating any objects
 6. Click **Edit Plan** on the plan card that appears — review the architecture diagram (mermaid flowchart showing stage → raw → dedup → dynamic table) and the specific SQL statements that will be executed for each step
-7. Switch back: `/plan-off`
+7. Switch back: click the **Plan** dropdown and select **Agent**
 
 ### 1.3 Setting Approval / Permission Modes
 
-| Mode | Command | Grocery Use Case |
-|------|---------|-----------------|
-| Confirm Actions | (default) | Building a new promotion analysis — review each step |
-| Plan Mode | `/plan` | Exploring a complex supply chain query before running it |
-| Bypass | `/bypass` | Generating 20 department-level reports in a batch |
+Approval behavior is controlled via the **Default Approvals** dropdown in the chat window (located in the prompt toolbar area). Click the dropdown to switch between:
+
+| Mode | Dropdown Setting | Grocery Use Case |
+|------|-----------------|-----------------|
+| Confirm Actions | **Default Approvals** | Building a new promotion analysis — review each step before execution |
+| Bypass | **Bypass Approvals** | Generating 20 department-level reports in a batch without interruption |
+
+- **Default Approvals** — CoCo pauses and asks for your confirmation before executing tool calls (running SQL, creating files, executing shell commands). You see a permission prompt and can approve or reject each action.
+- **Bypass Approvals** — CoCo auto-approves all tool actions without pausing. Useful when you trust the workflow and want uninterrupted execution (e.g., batch operations, iterative fixes).
 
 **Hands-on Exercise:**
-1. In default mode, ask: "Create a SQL file that calculates weekly produce shrinkage by store" — observe the permission prompt before file creation
-2. Switch to `/bypass` and ask: "Now create the same for dairy, bakery, and deli departments" — observe auto-approval
-3. Return to safe mode: `/bypass-off`
+1. With **Default Approvals** selected (the default), ask: "Create a bash script called `scripts/daily_revenue_check.sh` that runs a SQL query against RETAIL_DB.SALES.DAILY_ITEM_SALES to show today's total revenue by department" — observe the permission prompt before the file is written; click **Allow** to proceed
+2. Click the **Default Approvals** dropdown and switch to **Bypass Approvals**
+3. Now ask: "Create the same type of script for shrinkage checks, stock level checks, and expiration alerts — one script file each in the scripts/ folder" — observe that CoCo creates all three files without pausing for approval
+4. Switch the dropdown back to **Default Approvals** to restore the safe default
 
 ### 1.4 The Context Window & When to Start a New Session
 
@@ -109,7 +114,7 @@ The **context window** is the total amount of information the agent can hold in 
 - **Use files as external memory**: Ask the agent to save intermediate results to files (e.g., `save this analysis to reports/findings.md`) — you can `@`-reference them later without re-querying
 
 **Hands-on Exercise:**
-1. Hover over the **context window indicator** in the bottom-right status area of the Agent chat — note the percentage consumed and the token count (e.g., "10.7% · 106.5K out of 1M tokens used")
+1. Hover over the **context window indicator** in the bottom-right status area — note the percentage consumed and the token count (e.g., "10.7% · 106.5K out of 1M tokens used")
 
 ### 1.5 Essential Shortcuts & Syntax
 
@@ -128,39 +133,47 @@ The **context window** is the total amount of information the agent can hold in 
 ### 2.1 What Are Skills?
 
 - Reusable instruction sets that encode domain expertise
-- Invoked with `/skill-name` from the Agent chat
-- Browse and discover available skills in the **Skills panel** in the sidebar
+- Invoked with `/skill-name` from the session prompt
+- Browse and discover available skills in **Settings** (gear icon) → **Skills**
 - Priority: Project > Global > Remote > Bundled
 
 **Retail Example:** A `/shrinkage-analysis` skill knows how to query your inventory tables, calculate shrinkage rates, compare to benchmarks, and output formatted reports — all from a single prompt.
 
 ### 2.2 Reviewing Packaged (Bundled) Skills
 
-Bundled skills ship with CoCo and are accessible directly from the **Skills panel** in the sidebar — no file browsing required.
+Bundled skills ship with CoCo and are accessible via **Settings** (gear icon) → **Skills** — no file browsing required.
 
 **Hands-on Exercise:**
-1. Open the **Skills panel** from the sidebar to view all available skills
-2. Find `sql-author` — click it to see its description, then invoke it from the Agent chat: `/sql-author Write a query to find the top 10 items by unit sales last week across all stores`
-3. Find `developing-with-streamlit` in the Skills panel — we'll use this later for dashboards
-4. Try from the Agent chat: `/cortex-code-guide What shortcuts help me work with Snowflake tables?`
+1. Click the **gear icon** to open Settings, then select **Skills** to view all available skills
+2. Find `sql-author` — click it to see its description, then invoke it from the session prompt: `/sql-author Write a query to find the top 10 items by unit sales last week across all stores`
+3. Find `developing-with-streamlit` in the skills list — we'll use this later for dashboards
+4. Try from the session prompt: `/data-quality What DMFs can I use to monitor freshness on RETAIL_DB.INVENTORY.DAILY_STOCK_LEVELS?`
 
 ### 2.3 Adding a Skill from GitHub
 
-Remote skills from GitHub can be added via the **Skills panel**. Open the Skills panel (lightning bolt icon in the sidebar), then click the **`+`** button beside the **GITHUB** section. Provide the GitHub repo URL pointing to the skill folder and CoCo will fetch and register it automatically.
+Remote skills from GitHub can be added via **Settings** (gear icon) → **Skills**. Click the **`+`** button beside the **GITHUB** section and provide the GitHub repo URL pointing to the skill folder — CoCo will fetch and register it automatically.
+
+**Browsing available skills:**
+
+1. Open the browser within CoCo by clicking the **globe icon** in the left sidebar
+2. Navigate to: `https://github.com/Snowflake-Labs/coco-skills`
+3. Browse the `skills/` folder to review the list of available community skills — each subfolder is a skill you can install
+4. Click into the `quickstart-guide` skill folder and review its contents (the `SKILL.md` file describes what it does — it fetches Snowflake Quickstart guides and walks you through them interactively)
+5. Copy the URL for this skill from your browser address bar: `https://github.com/Snowflake-Labs/coco-skills/tree/main/skills/quickstart-guide` — you'll paste this in step 2 below
 
 **Hands-on Exercise:**
-1. Open the **Skills panel** (lightning bolt icon) and click the **`+`** beside the **GITHUB** section
-2. Enter the following public repo skill URL: `https://github.com/Snowflake-Labs/coco-skills/tree/main/skills/snowflake-docs`
+1. Open **Settings** (gear icon) → **Skills** and click the **`+`** beside the **GITHUB** section
+2. Paste the URL you copied above: `https://github.com/Snowflake-Labs/coco-skills/tree/main/skills/quickstart-guide`
 3. CoCo will clone the repo and register the skill
-4. Once installed, verify the new skill appears in the GITHUB section of the Skills panel
-5. Test the skill from the Agent chat: `/snowflake-docs How do I create a dynamic table?` — observe how the skill fetches relevant Snowflake documentation and provides a detailed answer with syntax examples
+4. Once installed, verify the new skill appears in the GITHUB section under **Settings → Skills**
+5. Test the skill from the session prompt: `/quickstart-guide I want to do a quickstart on creating agents in snowflake` — observe how the skill finds the relevant quickstart, fetches its content, and offers to walk you through it step by step
 
 **Troubleshooting — "Host key verification failed" error:**
 
 If you see an error like:
 > Failed to add skill: Failed to download repository: Cloning into '...'... Host key verification failed. fatal: Could not read from remote repository.
 
-This means Git is trying to use SSH to clone the repo but your machine isn't configured for SSH access to GitHub. Since the skills repo is public, the simplest fix is to tell Git to use HTTPS instead. Ask CoCo in the Agent chat:
+This means Git is trying to use SSH to clone the repo but your machine isn't configured for SSH access to GitHub. Since the skills repo is public, the simplest fix is to tell Git to use HTTPS instead. Enter the following in the session prompt:
 
 ```
 Please run: git config --global url."https://github.com/".insteadOf "git@github.com:"
@@ -176,10 +189,10 @@ This configures Git to automatically use HTTPS for all GitHub repos, which requi
 
 **Hands-on Exercise:**
 
-1. In the **Agent tab**, copy and paste the following prompt:
+1. Start a new session, then copy and paste the following into the session prompt:
 
    ```
-   Create a new skill as follows:
+   Create a global skill as follows:
    name: promo-effectiveness
    description: Analyze promotion lift and ROI. Use when: promo analysis, promotion impact, lift calculation, ad effectiveness. Triggers: promo, promotion, lift, TPR, ad spend.
    Source data from the following: - Promotions table: RETAIL_DB.MARKETING.PROMOTIONS (promo_id, item_id, start_date, end_date, discount_pct, promo_type)
@@ -198,15 +211,15 @@ This configures Git to automatically use HTTPS for all GitHub repos, which requi
    Always confrim data range and items with user
    ```
 
-2. When prompted for the skill location, select **Global** (`~/.snowflake/cortex/skills/`) so it's available across all projects
+2. CoCo will create the skill as a **global skill** in `~/.snowflake/cortex/skills/` — this makes it available across all sessions and working directories
 
 3. Observe how CoCo invokes the `skill-development` skill and generates a well-structured `SKILL.md` with proper frontmatter, workflow steps, stopping points, and SQL templates
 
-4. **Refresh the skill list:** Open the **Skills panel** (lightning bolt icon in the sidebar) and click the **refresh icon** to reload available skills — verify `promo-effectiveness` now appears in the list
+4. **Refresh the skill list:** Open **Settings** (gear icon) → **Skills** and click the **refresh icon** to reload available skills — verify `promo-effectiveness` now appears in the list
 
-5. **View the skill:** Click on `promo-effectiveness` in the Skills panel to view the generated SKILL.md — note the structured workflow, mandatory stopping points, and SQL templates
+5. **View the skill:** Click on `promo-effectiveness` in the skills list to view the generated SKILL.md — note the structured workflow, mandatory stopping points, and SQL templates
 
-6. **Test the skill** — try these example prompts from the Agent chat:
+6. **Test the skill** — try these example prompts in the session prompt:
 
    - `/promo-effectiveness What was the lift on the BOGO promo?`
    - `/promo-effectiveness Compare ROI across all TPR promotions in Q1 vs Q2`
@@ -225,30 +238,32 @@ This configures Git to automatically use HTTPS for all GitHub repos, which requi
 
 **Hands-on Exercise:**
 
-1. In the Agent tab, type: `/build-app create an app for a store dashboard and deploy it to Snowflake`
+1. Start a new session. First, switch to plan mode by clicking the **Agent** dropdown (in the prompt toolbar) and selecting **Plan** — this ensures CoCo will design the app architecture and ask clarifying questions before creating any files.
 
-2. CoCo will ask what the app should do. Provide a detailed description that includes:
+2. In the session prompt, type: `/build-app create a Streamlit-in-Snowflake store operations dashboard`
+
+3. CoCo will ask clarifying questions about what the app should do. Provide a detailed description that includes:
    - **What it does** — the specific visualizations and KPIs you want
    - **Who uses it** — the audience (e.g., store managers)
    - **What data it touches** — name the schemas explicitly so CoCo queries real tables from the start
    - **Whether users view data or take actions** — this determines the framework choice
    - **App name with your initials** — since multiple participants are deploying to the same account
 
-   Example prompt:
-   > "This should be for store managers to use. It should include a store selector and date range picker. It should show KPIs for total revenue, shrinkage rate, out-of-stock count, avg basket size. I would like to see a bar chart of revenue by department and a table of the top 10 items approaching expiration date. Use data from RETAIL_DB.SALES and RETAIL_DB.INVENTORY schemas. Deploy it to Snowflake as Streamlit in Snowflake. Name the app '[YOUR_INITIALS]_Store Dashboard'. Use Snowpark get_active_session() for data access."
+   Example response:
+   > "This should be for store managers to use. It should include a store selector and date range picker. It should show KPIs for total revenue, shrinkage rate, out-of-stock count, avg basket size. I would like to see a bar chart of revenue by department and a table of the top 10 items approaching expiration date. Use data from RETAIL_DB.SALES and RETAIL_DB.INVENTORY schemas. Deploy it to Snowflake as Streamlit in Snowflake. Name the app '[YOUR_INITIALS]_Store Dashboard'."
 
    Replace `[YOUR_INITIALS]` with your actual initials (e.g. `CL_Store Dashboard`).
 
-3. CoCo recommends **Streamlit-in-Snowflake** as the framework (since this is a pure view/explore dashboard with no user actions). Confirm the selection.
+4. Review the plan CoCo produces — it should show the app architecture, data sources, and deployment steps without creating any files yet.
 
-4. CoCo discovers the tables in your schemas, inspects their columns, scaffolds the app using Snowpark's `get_active_session()` for data access, creates a stage, uploads the files, creates the Streamlit object in Snowflake, and opens the deployed app in the browser.
+5. Switch out of plan mode by clicking the **Plan** dropdown and selecting **Agent** — then tell CoCo to proceed with the plan. CoCo will discover the tables in your schemas, inspect their columns, scaffold the app using Snowpark's `get_active_session()` for data access, create a stage, upload the files, create the Streamlit object in Snowflake, and open the deployed app in the browser.
 
-5. The initial deployment may have errors (wrong table names, incompatible Streamlit features, etc.). Ask CoCo to fix them:
-   > "Test and validate the streamlit app works without errors and that selecting a store or date range updates the data."
+6. The initial deployment may have errors (wrong table names, incompatible Streamlit features, etc.). Navigate to the app in Snowsight: **Projects** → **Streamlit** → find your named app (e.g. "CL_Store Dashboard"). If you see any errors on the page, copy/paste the error text into the session prompt and ask CoCo to fix and redeploy:
+   > "I'm getting this error in the deployed app: [paste error here]. Please fix it and redeploy."
 
-   CoCo will open the deployed app in the browser, identify any runtime errors, fix the code (correcting table/column references, Streamlit version compatibility issues, Snowpark API usage), re-upload to the stage, and verify the app renders correctly with live data.
+   CoCo will diagnose the issue, fix the code (correcting table/column references, Streamlit version compatibility issues, Snowpark API usage), and re-upload to the stage. Refresh the app in Snowsight to verify the fix.
 
-6. Navigate to the app yourself in Snowsight: **Projects** → **Streamlit** → find your named app (e.g. "CL_Store Dashboard"). Test the store selector and date range picker — verify the KPIs, bar chart, and expiration table all update with different values for each store.
+7. Once the app loads without errors, test the store selector and date range picker — verify the KPIs, bar chart, and expiration table all update with different values for each store.
 
 7. **Iterate on the app with natural language.** Building an app with CoCo is iterative — once the base dashboard works, you can keep adding features by describing what you want. CoCo will modify the code, re-upload to the stage, and the deployed app updates automatically.
 
@@ -278,9 +293,7 @@ This configures Git to automatically use HTTPS for all GitHub repos, which requi
 **Key points:**
 - `/build-app` handles the full flow: framework recommendation → scaffold → deploy to Snowflake
 - The app deploys directly to Snowflake as a Streamlit-in-Snowflake object — no local server needed
-- Data access uses Snowpark's `get_active_session()` — the app runs natively inside Snowflake
 - Iteration is fast: CoCo edits the code and re-uploads to the stage; the deployed app updates on refresh
-- Packages are limited to the Snowflake Anaconda channel (Streamlit ≤1.52)
 - Access is controlled via Snowflake roles — grant access to any role for your store managers
 - Authentication is handled by Snowflake session (SSO) — no separate credentials needed
 
@@ -292,6 +305,21 @@ This configures Git to automatically use HTTPS for all GitHub repos, which requi
 | Access | Any role you grant |
 | Data | Native Snowpark `get_active_session()` |
 | Iteration | Re-upload files to stage |
+
+### 3.2 Optional: Corporate Branding
+
+**Scenario:** Your dashboard works, but it looks generic. Leadership wants it styled with the company's brand colours and fonts before rolling it out to store managers.
+
+**Hands-on Exercise:**
+
+1. In the session prompt, enter a prompt like:
+   > "Modify the [YOUR_INITIALS]_Store_Dashboard streamlit app so it is properly colour branded using the colour palette and fonts from https://www.empireco.ca/"
+
+   Replace `[YOUR_INITIALS]` with your initials (e.g. `CL_Store_Dashboard`).
+
+2. CoCo will browse the website, extract the brand colours and fonts, then update your Streamlit app's theme configuration and CSS styling to match.
+
+3. Refresh the app in Snowsight to see the branded version — headers, charts, KPI cards, and sidebar should now reflect the corporate colour palette.
 
 ---
 
@@ -311,7 +339,7 @@ This gives you guardrails that CoCo can't enforce natively: protected schemas, b
 
 **Part 1: Without a hook (the problem)**
 
-1. In the Agent chat, ask CoCo to create a view in the retail database:
+1. In the session prompt, ask CoCo to create a view in the retail database:
    > "Create a view called `[YOUR_INITIALS]_daily_revenue` in `RETAIL_DB.SALES` that shows total revenue per store per day from DAILY_TRANSACTIONS"
 
    CoCo will generate and execute something like:
@@ -600,7 +628,7 @@ MCP servers are managed via **Settings → MCP** in the CoCo Desktop UI:
 
 This server connects you to the world's largest open food product database — over 4 million products including Canadian grocery items from Loblaws, Sobeys, Metro, President's Choice, and more. You can look up products by barcode, search by brand/category, and retrieve nutrition data.
 
-1. Find your npx path — in the Agent chat:
+1. Find your npx path — in the session prompt:
    ```
    ! which npx
    ```
@@ -618,7 +646,7 @@ This server connects you to the world's largest open food product database — o
 
 4. Click **Save** — the server should show a green status indicator
 
-5. Test it in the Agent chat:
+5. Test it in the session prompt:
    > "Search Open Food Facts for Compliments chocolate chip cookies and show me the nutrition info"
 
    (Compliments is Sobeys' store brand — this should return products with full nutrition data and Nutri-Score ratings.)
@@ -639,7 +667,7 @@ This demonstrates how an external product database can enrich your internal reta
 
 > **Note:** This weather MCP server uses the US National Weather Service API and only supports **US locations**. If your stores are exclusively in Canada, you may skip this exercise — the Open Food Facts exercise above is the primary MCP demo.
 
-1. Find your npx path — in the Agent chat:
+1. Find your npx path — in the session prompt:
    ```
    ! which npx
    ```
@@ -654,7 +682,7 @@ This demonstrates how an external product database can enrich your internal reta
 
 4. Click **Save** — the server should show a green status indicator
 
-5. Test it in the Agent chat:
+5. Test it in the session prompt:
    > "Use the weather MCP to get the 3-day forecast for Atlanta, GA"
 
 **Combine with Snowflake data:**
@@ -663,7 +691,7 @@ This demonstrates how an external product database can enrich your internal reta
 This demonstrates the core MCP value: the agent seamlessly combines a live external data source with your internal Snowflake tables in a single prompt — no custom integration code required.
 
 **Troubleshooting — server fails to start (exit code 1 or "command not found"):**
-CoCo Desktop does not inherit your shell PATH, so bare `npx` may not resolve. Use the full absolute path as the **Command** — run `! which npx` in the Agent chat to find it (e.g. `/opt/homebrew/bin/npx`).
+CoCo Desktop does not inherit your shell PATH, so bare `npx` may not resolve. Use the full absolute path as the **Command** — run `! which npx` in the session prompt to find it (e.g. `/opt/homebrew/bin/npx`).
 
 Update both MCP servers to use the full path. The `@modelcontextprotocol/server-fetch` npm package has been removed from the registry — use the Python version (`mcp-server-fetch`) instead.
 
@@ -674,7 +702,7 @@ Update both MCP servers to use the full path. The `@modelcontextprotocol/server-
 ```
 MODES:       Mode selector in prompt toolbar (Confirm / Plan / Bypass)
 FILES:       @path  |  @path$lines  (type @ in chat for file picker)
-SKILLS:      /skill-name  (browse via Skills panel in sidebar)
+SKILLS:      /skill-name  (browse via Settings → Skills)
 TABLES:      #DB.SCHEMA.TABLE
 BASH:        !command
 TASK BOARD:  Ctrl+D  |  Task Board icon in toolbar
