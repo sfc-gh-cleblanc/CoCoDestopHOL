@@ -1,4 +1,4 @@
-# CoCo Desktop Workshop — Grocery Retail Edition
+# CoCo Desktop Workshop
 
 **Duration:** 4 hours (half-day)  
 **Audience:** Grocery retail analytics teams, data engineers, and technical stakeholders  
