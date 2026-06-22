@@ -16,7 +16,7 @@
 | 11:20 - 12:00 | Section 3: Building an Application | 40 min |
 | 12:00 - 12:30 | Lunch | 30 min |
 | 12:30 - 1:10 | Section 4: Hooks and Rules | 40 min |
-| 1:10 - 1:40 | Section 5: Task Board, Scheduled Tasks & Wrap-Up | 30 min |
+| 1:10 - 1:40 | Section 5: Scheduled Tasks, Session Management & Wrap-Up | 30 min |
 | 1:40 - 2:10 | Optional: MCP (Model Context Protocol) | 30 min |
 
 ---
@@ -48,14 +48,6 @@ CoCo Desktop has two tabs in the top-right corner:
 
 You can work in both simultaneously — edit a SQL file manually in Editor, then ask the Agent to run and validate it.
 
-**Within the Agent tab — Modes:**
-
-| Mode | Behavior |
-|------|----------|
-| Default (Confirm Actions) | Agent prompts for permission before changes |
-| Plan Mode | Agent dropdown → **Plan** | Read-only — agent proposes but cannot execute |
-| Bypass (`/bypass`) | Agent auto-approves all actions |
-
 **Hands-on Exercise:**
 1. Click the **Editor** tab — use **File → Open Folder** to open your workshop project directory (e.g., `~/CortexCodeWorkshop`). This sets your **working directory** — all files the agent creates or reads will be relative to this folder. You'll see the folder tree appear in the left sidebar.
 2. In the left sidebar, expand the **Snowflake catalog** and browse to the **RETAIL_DB** database. Explore the schemas and tables listed — this is your reference for the retail database schema used throughout the workshop.
@@ -76,6 +68,8 @@ Approval behavior is controlled via the **Default Approvals** dropdown in the ch
 
 - **Default Approvals** — CoCo pauses and asks for your confirmation before executing tool calls (running SQL, creating files, executing shell commands). You see a permission prompt and can approve or reject each action.
 - **Bypass Approvals** — CoCo auto-approves all tool actions without pausing. Useful when you trust the workflow and want uninterrupted execution (e.g., batch operations, iterative fixes).
+
+> **⚠️ Warning:** It is **not recommended** to use Bypass mode for general work. Bypass disables all confirmation prompts, meaning CoCo will execute destructive operations (DROP, DELETE, overwriting files) without asking. Only use Bypass for well-understood, low-risk batch operations where you've already validated the workflow. Always switch back to Default Approvals immediately after.
 
 **Hands-on Exercise:**
 1. With **Default Approvals** selected (the default), ask: "Create a bash script called `scripts/daily_revenue_check.sh` that runs a SQL query against RETAIL_DB.SALES.DAILY_ITEM_SALES to show today's total revenue by department" — observe the permission prompt before the file is written; click **Allow** to proceed
@@ -357,65 +351,61 @@ This gives you guardrails that CoCo can't enforce natively: protected schemas, b
 2. Now ask CoCo to drop it:
    > "Drop the view `[YOUR_INITIALS]_daily_revenue` from `RETAIL_DB.SALES`"
 
-   CoCo will execute:
+   CoCo will generate:
    ```sql
    DROP VIEW RETAIL_DB.SALES.[YOUR_INITIALS]_DAILY_REVENUE;
    ```
 
-   CoCo drops it without hesitation. No guardrail — a destructive DDL against a shared database ran silently.
+   Because you're in **Default Approvals** mode, CoCo will show a permission prompt asking you to **Allow** or **Skip** the command. Click **Allow** — CoCo drops the view. The approval prompt is a generic "do you want to run this?" confirmation, not a policy-aware guardrail. It doesn't know that RETAIL_DB is a shared production database or that DROP statements should be treated differently from SELECT statements. Any user who clicks Allow can destroy objects without a domain-specific safety net.
 
 ---
 
 **Part 2: Add the hook**
 
-3. In the **Editor tab**, create a new file in your workshop folder called `block-drop-retail.sh` (**File → New File**, paste the contents below, then **Save As** → `block-drop-retail.sh` in your working directory):
+3. Ask CoCo to create and register the hook for you. Copy and paste the following into the session prompt:
 
-```bash
-#!/bin/bash
-INPUT=$(cat)
-TOOL=$(echo "$INPUT" | python3 -c "import sys,json; print(json.load(sys.stdin).get('tool_name',''))" 2>/dev/null)
+   > "Create an executable hook script called block-drop-retail that prevents DROP, DELETE and TRUNCATE operations against RETAIL_DB for all coco sessions. Ensure it is registered to fire before all tools usage"
 
-if [ "$TOOL" = "snowflake_sql_execute" ]; then
-    SQL=$(echo "$INPUT" | python3 -c "import sys,json; print(json.load(sys.stdin).get('tool_input',{}).get('sql','').upper())" 2>/dev/null)
+   CoCo will create the hooks directory, write the script, make it executable, and register it in `hooks.json`. The generated script should look something like:
 
-    if echo "$SQL" | grep -qE "(DROP|DELETE|TRUNCATE).*RETAIL_DB"; then
-        echo "BLOCKED: DROP, DELETE, and TRUNCATE operations against RETAIL_DB are not permitted from CoCo. Use Snowsight for destructive operations on shared databases." >&2
-        exit 2
-    fi
-fi
+   ```bash
+   #!/bin/bash
+   INPUT=$(cat)
+   TOOL=$(echo "$INPUT" | python3 -c "import sys,json; print(json.load(sys.stdin).get('tool_name',''))" 2>/dev/null)
 
-exit 0
-```
+   if [ "$TOOL" = "snowflake_sql_execute" ]; then
+       SQL=$(echo "$INPUT" | python3 -c "import sys,json; print(json.load(sys.stdin).get('tool_input',{}).get('sql','').upper())" 2>/dev/null)
 
-4. Ask CoCo to move it into place and make it executable:
-   > "Move block-drop-retail.sh to ~/.snowflake/cortex/hooks/ and make it executable"
+       if echo "$SQL" | grep -qE "(DROP|DELETE|TRUNCATE).*RETAIL_DB"; then
+           echo "BLOCKED: DROP, DELETE, and TRUNCATE operations against RETAIL_DB are not permitted from CoCo. Use Snowsight for destructive operations on shared databases." >&2
+           exit 2
+       fi
+   fi
 
-   CoCo will create the hooks directory if needed, move the file, and run `chmod +x`.
+   exit 0
+   ```
 
-5. Ask CoCo to register the hook in `hooks.json`:
-   > "Update ~/.snowflake/cortex/hooks.json to add a PreToolUse hook that runs the block-drop-retail.sh script in the hooks folder whenever snowflake_sql_execute is called, with a 5 second timeout. Use the full absolute path to the script, not ~"
+   Verify the hook was registered: open **Settings** (gear icon) → **Hooks** and confirm that `block-drop-retail` appears in the list with a `PreToolUse` event type. Click on it to inspect the command path and timeout.
 
-   CoCo will create or update the JSON file with the correct structure.
+   > **Important:** The command path in `hooks.json` must be an **absolute path** (e.g. `/Users/yourname/.snowflake/cortex/hooks/block-drop-retail.sh`). The `~` shorthand does not expand in JSON config files. If you see `~` in the Settings panel, ask CoCo to fix it to the full absolute path.
 
-   > **Important:** The command path in `hooks.json` must be an **absolute path** (e.g. `/Users/yourname/.snowflake/cortex/hooks/block-drop-retail.sh`). The `~` shorthand does not expand in JSON config files.
-
-6. **Restart CoCo** (the hook file is read at startup)
+4. **Restart CoCo** (the hook file is read at startup)
 
 ---
 
 **Part 3: With the hook in place (the guardrail)**
 
-7. Re-create the view:
+5. Re-create the view:
    > "Create a view called `[YOUR_INITIALS]_daily_revenue` in `RETAIL_DB.SALES` that shows total revenue per store per day from DAILY_TRANSACTIONS"
 
    CoCo creates it. ✓
 
-8. Now try to drop it again with the same prompt as before:
+6. Now try to drop it again with the same prompt as before:
    > "Drop the view `[YOUR_INITIALS]_daily_revenue` from `RETAIL_DB.SALES`"
 
    **Blocked.** CoCo receives the message: *"DROP, DELETE, and TRUNCATE operations against RETAIL_DB are not permitted..."* and tells you it cannot proceed. The view is still there.
 
-9. Confirm the hook doesn't over-block — try a safe read:
+7. Confirm the hook doesn't over-block — try a safe read:
    > "Show me the top 5 stores by revenue from RETAIL_DB.SALES.DAILY_TRANSACTIONS"
 
    This succeeds normally — the hook only fires on destructive DDL against RETAIL_DB.
@@ -460,89 +450,13 @@ exit 0
 
 ---
 
-## Section 5: Task Board, Scheduled Tasks & Wrap-Up (30 min)
+## Section 5: Scheduled Tasks, Session Management & Wrap-Up (30 min)
 
 ### 5.1 Scheduled Tasks with CoCo
 
 **Scenario:** Every Monday morning, your team needs a fresh shrinkage report. Every night, inventory anomalies should be flagged.
 
-CoCo Desktop supports scheduled tasks via **Settings → Scheduled Tasks**:
-- Click **Add Scheduled Task**
-- Enter a prompt (what you want CoCo to do), a schedule (cron expression or preset like "Every Monday at 6 AM"), and a working directory
-- Tasks run automatically and save output to the configured location
-
-**Automation patterns for grocery retail:**
-
-| Task | Schedule | Prompt |
-|------|----------|--------|
-| Weekly shrinkage report | Every Monday at 6 AM | "Generate weekly shrinkage report for all stores, compare to last week, flag any store above 3% threshold. Save to /reports/weekly_shrinkage.md" |
-| Nightly anomaly detection | Every day at 11 PM | "Check for inventory count anomalies in today's data. Flag items with variance >20% from expected. Save alerts to /alerts/inventory_anomalies.md" |
-| Friday promo summary | Every Friday at 5 PM | "Summarize this week's active promotions: lift %, incremental revenue, and any underperforming promos. Save to /reports/promo_weekly.md" |
-
-### 5.2 The Task Board — Project Task Tracking
-
-When you give CoCo a complex, multi-step request, it automatically creates an internal **task board** (visible via `Ctrl+D` or `/tasks`) to plan, track, and show progress. This is CoCo's built-in project management — a visual checklist that updates in real-time as work completes.
-
-**How it works:**
-- CoCo breaks complex prompts into discrete tasks with statuses: `pending`, `in_progress`, `completed`
-- Only one task is `in_progress` at a time
-- The board updates live as each step finishes
-- Open the fullscreen task view with `Ctrl+D` or click the **Task Board icon** in the toolbar
-
-**Scenario:** You ask CoCo to build an end-to-end inventory health report for the produce department. Watch how it creates and progresses through a task board:
-
-**Hands-on Exercise:**
-1. Give CoCo a complex multi-step request:
-   > "Build a complete produce department health report for Store 305. Include:
-   > - Current stock levels vs par levels
-   > - This week's shrinkage rate and trend vs last 4 weeks
-   > - Top 10 items by waste (lbs)
-   > - Items within 2 days of expiration
-   > - A summary recommendation paragraph
-   > Save the report as `reports/produce_health_store305.md`"
-
-2. Watch CoCo create its task board — you'll see something like:
-   ```
-   ☐ Query current stock levels vs par levels for Store 305 produce
-   ☐ Calculate weekly shrinkage rate and 4-week trend
-   ☐ Identify top 10 items by waste weight
-   ☐ Query items approaching expiration (within 2 days)
-   ☐ Generate summary recommendation
-   ☐ Compile and save final report
-   ```
-
-3. Press `Ctrl+D` or click the **Task Board icon** in the toolbar to open the fullscreen task view — observe tasks moving from pending → in_progress → completed
-
-4. Try interrupting mid-task: press `Escape` to stop streaming, then ask "What's left to do?" — CoCo reports remaining tasks
-
-5. Give another complex request to see the board reset:
-   > "Now do the same report for dairy, bakery, and deli departments — one file each"
-   
-   Observe how CoCo creates a task per department.
-
-**Key points:**
-- The task board is automatic for complex requests (3+ steps)
-- You don't need to create tasks manually — CoCo infers them from your prompt
-- Tasks provide visibility into long-running work
-- If a session is interrupted, use **File → Resume Session** to restore context — the task state is preserved
-- The board helps CoCo stay on track and not skip steps
-
-**When the task board activates:**
-| Request Type | Task Board? |
-|-------------|-------------|
-| "What's the shrinkage rate?" | No — single query |
-| "Create a file with this SQL" | No — single action |
-| "Build a full report with 5 sections" | Yes — multi-step |
-| "Refactor all department queries to use parameters" | Yes — multi-file |
-| "Set up a new Streamlit app with 3 pages" | Yes — multi-step |
-
----
-
-### 5.3 Scheduled Tasks & Automation
-
-**Scenario:** Every Monday morning, your team needs a fresh shrinkage report. Every night, inventory anomalies should be flagged.
-
-Scheduled tasks are configured in **Settings → Scheduled Tasks**. Each task needs:
+CoCo Desktop supports scheduled tasks via the **Automations** panel. In **Editor mode**, click the **Automations** icon in the left activity bar (or in **Agent mode**, click **Automations** at the top of the navigation panel). Each automation needs:
 - A **prompt** describing what CoCo should do
 - A **schedule** (choose a preset or enter a cron expression)
 - A **working directory** pointing to your project folder
@@ -556,12 +470,12 @@ Scheduled tasks are configured in **Settings → Scheduled Tasks**. Each task ne
 | Friday promo summary | Every Friday at 5 PM | "Summarize this week's active promotions: lift %, incremental revenue, and any underperforming promos. Save to /reports/promo_weekly.md" |
 
 **Hands-on Exercise:**
-1. Open **Settings → Scheduled Tasks** and click **Add Scheduled Task**
-2. Configure a task: prompt "List the top 5 departments by shrinkage rate this month", schedule "Run now (one-time)"
+1. Open the **Automations** panel (activity bar in Editor mode, or navigation panel shortcut in Agent mode) and click **Add Automation**
+2. Configure an automation: prompt "List the top 5 departments by shrinkage rate this month", schedule "Run now (one-time)"
 3. Run it and observe the output
 4. Discuss: What recurring reports would you automate for your stores?
 
-### 5.4 Session Management for Continuity
+### 5.2 Session Management for Continuity
 
 **Retail scenario:** You're building a complex demand forecasting model across multiple sessions.
 
@@ -573,28 +487,49 @@ Scheduled tasks are configured in **Settings → Scheduled Tasks**. Each task ne
 | Rewind | Click **Rewind** in the session menu | The agent went down a wrong path with the model — undo it |
 | Compact | Click **Compact** in the session menu | Session is getting long after hours of iteration — summarize and continue |
 
-### 5.5 Wrap-Up & Q&A
+### 5.3 SnowBoard — Task Management
 
-**Key Takeaways for Grocery Retail Teams:**
-1. **Agent vs Editor** — Use Agent for "build me a shrinkage dashboard," Editor for tweaking SQL manually
-2. **Profiles** — Role-based capabilities mean analysts and engineers get tailored experiences
-3. **Skills** — Encode your team's domain expertise (promo analysis, inventory audits) as reusable skills
-4. **MCP** (Optional) — Connect supplier APIs, weather data, POS systems directly into your workflow
-5. **Streamlit** — Build and deploy dashboards directly to Snowflake for all 200 store managers
-6. **Hooks** — Protect production data, get notified when long analytics jobs finish
-7. **Scheduled tasks** — Automate Monday reports, nightly anomaly detection, weekly promo summaries
+**What is SnowBoard?** SnowBoard is a persistent task management panel built into CoCo Desktop. Unlike the ephemeral tool execution steps you see in chat, SnowBoard tasks persist across sessions — making it useful for tracking work items, action items from meetings, or multi-session projects.
 
-**Next Steps:**
-- Build a team skill library in a shared GitHub repo
-- Set up hooks to protect production tables
-- Create an `AGENTS.md` for your analytics project standards
-- Schedule your first automated report via **Settings → Scheduled Tasks**
+> **Note:** SnowBoard is currently an **experimental feature** and must be enabled manually.
 
-**Resources:**
-- In-app help: **Help menu** or ask "What can you do?"
-- Skill guide: `/coco-guide`
-- Docs: https://docs.snowflake.com/en/user-guide/cortex-code/cortex-code-cli
-- Configuration: **Settings** panel in the app
+**Enabling SnowBoard:**
+
+1. Open **Settings** (gear icon) → **Workspace** section
+2. Under **Chat > Snowboard**, check the **Enabled** toggle
+3. Once enabled, SnowBoard appears as a section in the left navigation panel in **Agent mode** (below Automations and Apps)
+
+**How it works:**
+- Tasks have statuses: `backlog`, `in_progress`, `need_approval`, `review`, `done`
+- Tasks include a title, description, priority (urgent/high/medium/low), source tag, and source link
+- Tasks persist across sessions — they're not tied to a single conversation
+- CoCo can create and update tasks on your behalf when you ask it to
+
+**Hands-on Exercise:**
+
+1. Verify SnowBoard is enabled: check the left navigation panel in Agent mode — you should see a **SnowBoard** section below Automations
+
+2. Ask CoCo to create a task:
+   > "Add a SnowBoard task: title 'Set up weekly shrinkage report automation', description 'Configure an automation that runs every Monday at 6 AM to generate a shrinkage report for all stores and flag any above 3% threshold', priority high, tag workshop"
+
+3. Check the SnowBoard panel — your task should appear with `backlog` status
+
+4. Ask CoCo to update the task status:
+   > "Move my SnowBoard task about shrinkage report automation to in_progress"
+
+5. Create a few more tasks to simulate a project backlog:
+   > "Add these SnowBoard tasks:
+   > - 'Add department filter to store dashboard' priority medium, tag dashboard
+   > - 'Create hook to block writes to INVENTORY schema' priority high, tag security
+   > - 'Build promo ROI skill for category managers' priority low, tag skills"
+
+6. Review the SnowBoard panel — observe how tasks are organized and can be tracked across sessions
+
+**Key points:**
+- SnowBoard is for persistent project tracking across sessions (like a lightweight Jira)
+- Tasks created in one session are available in all future sessions
+- Useful for tracking action items, project backlogs, and multi-day work
+- CoCo can create and update tasks conversationally — no manual UI entry required
 
 ---
 
@@ -705,11 +640,10 @@ FILES:       @path  |  @path$lines  (type @ in chat for file picker)
 SKILLS:      /skill-name  (browse via Settings → Skills)
 TABLES:      #DB.SCHEMA.TABLE
 BASH:        !command
-TASK BOARD:  Ctrl+D  |  Task Board icon in toolbar
 AGENTS:      Agents panel in sidebar
 MCP:         Settings → MCP
 CONNECTIONS: Click connection name in status bar
-SCHEDULE:    Settings → Scheduled Tasks
+SCHEDULE:    Automations panel (activity bar in Editor mode)
 SESSION:     Fork / Rewind / Compact / Resume via session menu
 CONFIG:      Settings panel in the app
 ```
