@@ -9,15 +9,23 @@
 
 ## Agenda Overview
 
-| Time | Section | Duration |
-|------|---------|----------|
-| 10:00 - 10:40 | Section 1: Orientation & UI Fundamentals | 40 min |
-| 10:40 - 11:20 | Section 2: Understanding Skills | 40 min |
-| 11:20 - 12:00 | Section 3: Building an Application | 40 min |
-| 12:00 - 12:30 | Lunch | 30 min |
-| 12:30 - 1:10 | Section 4: Hooks and Rules | 40 min |
-| 1:10 - 1:40 | Section 5: Scheduled Tasks, Session Management & Wrap-Up | 30 min |
-| 1:40 - 2:10 | Optional: MCP (Model Context Protocol) | 30 min |
+### The Fundamentals
+
+| Section | Duration |
+|---------|----------|
+| Section 1: Orientation & UI Fundamentals | 40 min |
+| Section 2: Understanding Skills | 40 min |
+| Section 3: Building an Application | 40 min |
+
+### Lunch
+
+### Advanced Items
+
+| Section | Duration |
+|---------|----------|
+| Section 4: Hooks and Rules | 40 min |
+| Section 5: Scheduled Tasks, Session Management & Wrap-Up | 30 min |
+| Optional: MCP (Model Context Protocol) | 30 min |
 
 ---
 
